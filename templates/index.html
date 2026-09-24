@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Explorateur d'adresses crypto</title>
+  <style>
+    /* ------------------------------------------------------------------
+       Variables
+       ------------------------------------------------------------------ */
+    :root {
+      --btc-orange: #F7931A;
+      --btc-orange-dark: #e07d0a;
+      --btc-orange-soft: #fff4e5;
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --border: #e6e8ec;
+      --text: #101214;
+      --text-muted: #6b7280;
+      --success: #10b981;
+      --error: #ef4444;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow-sm: 0 1px 2px rgba(16, 18, 20, .06);
+      --shadow-md: 0 8px 24px rgba(16, 18, 20, .08);
+      --shadow-lg: 0 20px 60px rgba(247, 147, 26, .18);
+      --transition: 320ms cubic-bezier(.4, 0, .2, 1);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* ------------------------------------------------------------------
+       Layout
+       ------------------------------------------------------------------ */
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Barre compacte (après recherche) */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      padding: 0.5rem 1rem;
+      transform: translateY(-100%);
+      opacity: 0;
+      transition: transform var(--transition), opacity var(--transition);
+    }
+    .topbar.visible { transform: translateY(0); opacity: 1; }
+    .topbar-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .topbar .brand {
+      font-weight: 700; color: var(--btc-orange);
+      font-size: 1rem; white-space: nowrap; letter-spacing: -.01em;
+    }
+
+    /* Enveloppe de recherche (pour positionner les suggestions) */
+    .search-shell { position: relative; flex: 1; }
+    .hero .search-shell { max-width: 640px; width: 100%; }
+
+    .topbar form {
+      display: flex; gap: 0.5rem; align-items: center;
+    }
+    .topbar input {
+      flex: 1; height: 36px; padding: 0 0.85rem;
+      font-size: 0.9rem;
+      border-radius: 999px; border: 1px solid var(--border);
+      background: var(--bg); outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .topbar input:focus {
+      border-color: var(--btc-orange);
+      box-shadow: 0 0 0 3px rgba(247, 147, 26, .15);
+    }
+    .topbar button[type="submit"] {
+      height: 36px; padding: 0 1rem;
+      border-radius: 999px; border: none;
+      background: var(--btc-orange); color: #fff;
+      font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; transition: background .15s;
+    }
+    .topbar button[type="submit"]:hover { background: var(--btc-orange-dark); }
+
+    /* Héro */
+    .hero {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 2rem 1rem 4rem;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, var(--btc-orange-soft), transparent 70%),
+        var(--bg);
+      transition: opacity var(--transition), transform var(--transition);
+    }
+    .hero.hidden {
+      opacity: 0; transform: scale(.98);
+      pointer-events: none; position: absolute; inset: 0;
+      visibility: hidden;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0.9rem; border-radius: 999px;
+      background: rgba(247, 147, 26, .12);
+      color: var(--btc-orange-dark);
+      font-size: 0.8rem; font-weight: 600; margin-bottom: 1.5rem;
+    }
+    .hero-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--btc-orange);
+      box-shadow: 0 0 0 4px rgba(247, 147, 26, .18);
+    }
+    .hero h1 {
+      font-size: clamp(1.8rem, 4vw, 2.75rem);
+      line-height: 1.15; margin: 0 0 0.75rem;
+      text-align: center; letter-spacing: -.02em;
+    }
+    .hero h1 span { color: var(--btc-orange); }
+    .hero p {
+      color: var(--text-muted); font-size: 1rem; text-align: center;
+      max-width: 520px; margin: 0 0 2.25rem;
+    }
+
+    .hero form {
+      background: var(--surface);
+      padding: 0.6rem;
+      border-radius: 999px;
+      box-shadow: var(--shadow-lg), var(--shadow-sm);
+      display: flex; gap: 0.5rem; align-items: center;
+      border: 1px solid var(--border);
+    }
+    .hero input {
+      flex: 1; height: 52px; padding: 0 1.2rem;
+      font-size: 1rem; border: none; background: transparent;
+      outline: none; color: var(--text);
+    }
+    .hero input::placeholder { color: #9aa1ac; }
+    .hero button[type="submit"] {
+      height: 52px; padding: 0 1.6rem;
+      border-radius: 999px; border: none;
+      background: var(--btc-orange); color: #fff;
+      font-weight: 600; font-size: 0.95rem;
+      cursor: pointer; transition: background .15s, transform .15s;
+    }
+    .hero button[type="submit"]:hover { background: var(--btc-orange-dark); }
+    .hero button[type="submit"]:active { transform: scale(.98); }
+
+    .hero-chains {
+      display: flex; gap: 0.5rem; margin-top: 1.25rem;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .chip {
+      font-size: 0.78rem; color: var(--text-muted);
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 0.3rem 0.7rem; border-radius: 999px;
+      cursor: pointer; transition: all .15s;
+    }
+    .chip:hover { border-color: var(--btc-orange); color: var(--btc-orange-dark); }
+
+    /* ------------------------------------------------------------------
+       Suggestions dropdown
+       ------------------------------------------------------------------ */
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0; right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      z-index: 100;
+      animation: fadeSlide .15s ease;
+    }
+    .suggestions[hidden] { display: none; }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .suggestions-header {
+      padding: 0.55rem 0.9rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      font-weight: 600;
+      background: #fafbfc;
+      border-bottom: 1px solid var(--border);
+    }
+    .suggestion-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.7rem 0.9rem;
+      cursor: pointer;
+      transition: background .12s;
+      border-bottom: 1px solid var(--border);
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover,
+    .suggestion-item.active {
+      background: var(--btc-orange-soft);
+    }
+    .suggestion-chain {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.7rem;
+      background: rgba(247, 147, 26, .12);
+      color: var(--btc-orange-dark);
+      flex-shrink: 0;
+    }
+    .suggestion-text {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 0.1rem;
+    }
+    .suggestion-address {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem;
+      color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .suggestion-name {
+      font-size: 0.75rem;
+      color: var(--btc-orange-dark);
+      font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .suggestion-name.muted {
+      color: var(--text-muted);
+      font-weight: 400;
+      font-style: italic;
+    }
+    .suggestion-time {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    /* ------------------------------------------------------------------
+       Résultats
+       ------------------------------------------------------------------ */
+    .results {
+      flex: 1; max-width: 1100px; width: 100%;
+      margin: 0 auto; padding: 1.5rem 1rem 3rem;
+      display: none;
+    }
+    .results.visible { display: block; }
+
+    .identity {
+      display: flex; align-items: flex-start; gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .avatar {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--btc-orange), var(--btc-orange-dark));
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1.1rem;
+      flex-shrink: 0; box-shadow: var(--shadow-sm);
+    }
+    .identity-text { min-width: 0; flex: 1; }
+    .identity-name {
+      font-size: 1.35rem; font-weight: 700;
+      margin: 0 0 0.2rem; letter-spacing: -.01em;
+      display: flex; align-items: center; gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .identity-name .placeholder {
+      color: var(--text-muted); font-weight: 500;
+      font-style: italic; font-size: 1rem;
+    }
+    .identity-name .chain-badge {
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem; border-radius: 6px;
+      background: rgba(247, 147, 26, .12);
+      color: var(--btc-orange-dark);
+      letter-spacing: .04em;
+    }
+    .identity-address {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem; color: var(--text-muted);
+      display: flex; align-items: center; gap: 0.5rem;
+      word-break: break-all;
+    }
+    .copy-btn {
+      background: none; border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.15rem 0.4rem;
+      font-size: 0.7rem; cursor: pointer;
+      color: var(--text-muted);
+      transition: all .15s;
+    }
+    .copy-btn:hover {
+      border-color: var(--btc-orange); color: var(--btc-orange-dark);
+    }
+
+    /* Bouton de rafraîchissement du nom */
+    .name-refresh {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all .15s;
+      flex-shrink: 0;
+      padding: 0;
+    }
+    .name-refresh:hover:not(:disabled) {
+      border-color: var(--btc-orange);
+      color: var(--btc-orange-dark);
+      transform: rotate(45deg);
+    }
+    .name-refresh:disabled {
+      cursor: wait;
+      opacity: .6;
+    }
+    .name-refresh svg { display: block; }
+    .name-refresh.spinning svg {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* Grille stats */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem; margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.1rem 1.2rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-label {
+      font-size: 0.75rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .05em;
+      font-weight: 600; margin-bottom: 0.5rem;
+    }
+    .card-value { font-size: 1.4rem; font-weight: 700; letter-spacing: -.01em; }
+    .card-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.25rem; }
+    .card-value.accent { color: var(--btc-orange); }
+
+    /* Transactions */
+    .tx-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+    .tx-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+    }
+    .tx-header h2 {
+      font-size: 1rem; font-weight: 700; margin: 0; letter-spacing: -.01em;
+    }
+    .tx-header .count {
+      font-size: 0.78rem; color: var(--text-muted);
+      background: var(--bg); padding: 0.2rem 0.6rem; border-radius: 999px;
+    }
+    .tx-list { list-style: none; margin: 0; padding: 0; }
+    .tx-item {
+      display: grid; grid-template-columns: auto 1fr auto;
+      gap: 1rem; align-items: center;
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .tx-item:last-child { border-bottom: none; }
+    .tx-item:hover { background: #fafbfc; }
+    .tx-icon {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; font-weight: 700; flex-shrink: 0;
+    }
+    .tx-icon.in  { background: rgba(16, 185, 129, .12); color: var(--success); }
+    .tx-icon.out { background: rgba(239, 68, 68, .10); color: var(--error); }
+    .tx-icon.pending { background: rgba(247, 147, 26, .14); color: var(--btc-orange-dark); }
+    .tx-main { min-width: 0; }
+    .tx-hash {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.82rem; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tx-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .tx-amount {
+      font-weight: 700; font-size: 0.95rem;
+      white-space: nowrap; text-align: right;
+    }
+
+    /* États vides / erreurs / skeletons */
+    .empty {
+      padding: 3rem 1rem; text-align: center;
+      color: var(--text-muted); font-size: 0.9rem;
+    }
+    .empty svg { opacity: .5; margin-bottom: 0.75rem; }
+
+    .alert {
+      max-width: 1100px; margin: 0 auto 1.5rem;
+      padding: 0.9rem 1.1rem; border-radius: var(--radius-sm);
+      background: rgba(239, 68, 68, .08);
+      border: 1px solid rgba(239, 68, 68, .25);
+      color: #991b1b; font-size: 0.88rem;
+    }
+    .toast {
+      position: fixed; bottom: 1.5rem; left: 50%;
+      transform: translateX(-50%) translateY(100%);
+      padding: 0.75rem 1.2rem;
+      border-radius: var(--radius-sm);
+      background: var(--text); color: #fff;
+      font-size: 0.85rem;
+      box-shadow: var(--shadow-md);
+      z-index: 200;
+      opacity: 0;
+      transition: all .3s ease;
+      max-width: 90vw;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    .toast.success { background: var(--success); }
+    .toast.error   { background: var(--error); }
+
+    .skeleton {
+      background: linear-gradient(90deg, #eef0f3 25%, #e2e5ea 37%, #eef0f3 63%);
+      background-size: 400% 100%;
+      animation: shimmer 1.4s ease infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 100% 0; }
+      100% { background-position: 0 0; }
+    }
+    .skeleton-card { height: 92px; }
+    .skeleton-tx { height: 56px; margin: 0.6rem 1.25rem; border-radius: var(--radius-sm); }
+
+    @media (max-width: 640px) {
+      .hero form { flex-direction: column; border-radius: var(--radius); padding: 0.75rem; }
+      .hero input, .hero button[type="submit"] { width: 100%; height: 48px; border-radius: var(--radius-sm); }
+      .identity { flex-direction: column; }
+      .tx-item { grid-template-columns: auto 1fr; }
+      .tx-amount { grid-column: 2; text-align: left; margin-top: 0.3rem; }
+      .suggestion-time { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Barre compacte -->
+    <header class="topbar" id="topbar">
+      <div class="topbar-inner">
+        <span class="brand">₿ Explorer</span>
+        <div class="search-shell">
+          <form id="topbar-form" autocomplete="off">
+            <input type="text" id="topbar-input" placeholder="Rechercher une adresse…" spellcheck="false">
+            <button type="submit">Analyser</button>
+          </form>
+          <div class="suggestions" id="topbar-suggestions" hidden></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Héro -->
+    <section class="hero" id="hero">
+      <div class="hero-badge"><span class="dot"></span>BTC · BCH · ETH</div>
+      <h1>Explorez n'importe quelle <span>adresse crypto</span></h1>
+      <p>Solde, identité et dernières transactions — en un coup d'œil.</p>
+
+      <div class="search-shell">
+        <form id="hero-form" autocomplete="off">
+          <input type="text" id="hero-input"
+                 placeholder="Entrez une adresse BTC, BCH ou ETH…"
+                 spellcheck="false">
+          <button type="submit">Analyser</button>
+        </form>
+        <div class="suggestions" id="hero-suggestions" hidden></div>
+      </div>
+
+      <div class="hero-chains">
+        <span class="chip" data-addr="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa">Exemple BTC</span>
+        <span class="chip" data-addr="bitcoincash:qp3wjpa3tjlj042z2wv7hahsldgwhwy0rq9sywjpyy">Exemple BCH</span>
+        <span class="chip" data-addr="0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe">Exemple ETH</span>
+      </div>
+    </section>
+
+    <!-- Résultats -->
+    <main class="results" id="results">
+      <div id="alert-slot"></div>
+
+      <div class="identity">
+        <div class="avatar" id="avatar">?</div>
+        <div class="identity-text">
+          <div class="identity-name" id="identity-name">
+            <span class="placeholder">Nom non résolu</span>
+          </div>
+          <div class="identity-address">
+            <span id="identity-address">—</span>
+            <button class="copy-btn" id="copy-addr" type="button">Copier</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid" id="stats-grid"></div>
+
+      <section class="tx-section">
+        <div class="tx-header">
+          <h2>Dernières transactions</h2>
+          <span class="count" id="tx-count">—</span>
+        </div>
+        <ul class="tx-list" id="tx-list">
+          <li class="empty" id="tx-empty">
+            Aucune transaction à afficher pour le moment.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ------------------------------------------------------------------
+       Références DOM
+       ------------------------------------------------------------------ */
+    const hero       = document.getElementById('hero');
+    const topbar     = document.getElementById('topbar');
+    const results    = document.getElementById('results');
+    const heroForm   = document.getElementById('hero-form');
+    const heroInput  = document.getElementById('hero-input');
+    const topbarForm = document.getElementById('topbar-form');
+    const topbarInput= document.getElementById('topbar-input');
+    const alertSlot  = document.getElementById('alert-slot');
+    const statsGrid  = document.getElementById('stats-grid');
+    const txList     = document.getElementById('tx-list');
+    const txCount    = document.getElementById('tx-count');
+    const identityName    = document.getElementById('identity-name');
+    const identityAddress = document.getElementById('identity-address');
+    const avatar     = document.getElementById('avatar');
+    const toast      = document.getElementById('toast');
+
+    // Mémorise l'état courant
+    let current = { address: null, chain: null, displayName: null };
+    let pollTimer = null;
+
+    /* ------------------------------------------------------------------
+       Toast
+       ------------------------------------------------------------------ */
+    function showToast(message, type = '') {
+      toast.textContent = message;
+      toast.className = 'toast show ' + type;
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => toast.classList.remove('show'), 3200);
+    }
+
+    /* ------------------------------------------------------------------
+       Chips d'exemple
+       ------------------------------------------------------------------ */
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        heroInput.value = chip.dataset.addr;
+        heroForm.dispatchEvent(new Event('submit', { cancelable: true }));
+      });
+    });
+
+    /* ------------------------------------------------------------------
+       Soumission
+       ------------------------------------------------------------------ */
+    heroForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const addr = heroInput.value.trim();
+      if (addr) search(addr);
+    });
+    topbarForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const addr = topbarInput.value.trim();
+      if (addr) search(addr);
+    });
+
+    /* ------------------------------------------------------------------
+       Bascule héro → résultats
+       ------------------------------------------------------------------ */
+    function showResultsView() {
+      hero.classList.add('hidden');
+      topbar.classList.add('visible');
+      results.classList.add('visible');
+    }
+
+    /* ------------------------------------------------------------------
+       Recherche principale
+       ------------------------------------------------------------------ */
+    async function search(address) {
+      showResultsView();
+      topbarInput.value = address;
+      heroInput.value = address;
+
+      clearTimeout(pollTimer);
+      renderSkeleton();
+      alertSlot.innerHTML = '';
+
+      try {
+        const r = await fetch(`/api/address/${encodeURIComponent(address)}`);
+        const data = await r.json();
+        if (!r.ok) { renderError(data.error || `Erreur ${r.status}`, data.detail); return; }
+        renderResult(data);
+
+        // Si la résolution est en cours, on retente une lecture après 8 s.
+        if (data.name_resolving) {
+          pollTimer = setTimeout(() => pollNameOnce(address), 8000);
+        }
+      } catch (err) {
+        renderError('Erreur réseau', err.message);
+      }
+    }
+
+    async function pollNameOnce(address) {
+      if (current.address !== address) return;
+      try {
+        const r = await fetch(`/api/address/${encodeURIComponent(address)}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (current.address !== address) return;
+
+        if (data.display_name) {
+          updateNameDisplay(data.display_name, data.name_source, data.chain);
+          showToast('Nom résolu : ' + data.display_name, 'success');
+        } else if (data.name_resolving) {
+          // Toujours en cours : on retente une fois.
+          pollTimer = setTimeout(() => pollNameOnce(address), 10000);
+        }
+      } catch {}
+    }
+
+    /* ------------------------------------------------------------------
+       Skeleton
+       ------------------------------------------------------------------ */
+    function renderSkeleton() {
+      identityName.innerHTML =
+        '<span class="skeleton" style="display:inline-block;width:180px;height:20px;"></span>';
+      identityAddress.textContent = '…';
+      avatar.textContent = '?';
+      statsGrid.innerHTML = Array.from({ length: 4 })
+        .map(() => '<div class="card skeleton-card skeleton"></div>').join('');
+      txCount.textContent = '—';
+      txList.innerHTML = Array.from({ length: 3 })
+        .map(() => '<li class="skeleton-tx skeleton"></li>').join('');
+    }
+
+    /* ------------------------------------------------------------------
+       Rendu erreur
+       ------------------------------------------------------------------ */
+    function renderError(message, detail) {
+      alertSlot.innerHTML =
+        `<div class="alert"><strong>${escapeHtml(message)}</strong>` +
+        (detail ? `<br><span style="font-size:.82rem;opacity:.8">${escapeHtml(detail)}</span>` : '') +
+        `</div>`;
+      statsGrid.innerHTML = '';
+      txList.innerHTML = '<li class="empty">—</li>';
+      txCount.textContent = '—';
+      identityName.innerHTML = '<span class="placeholder">—</span>';
+      identityAddress.textContent = '—';
+      avatar.textContent = '!';
+    }
+
+    /* ------------------------------------------------------------------
+       Rendu résultat
+       ------------------------------------------------------------------ */
+    function renderResult(data) {
+      const chain = (data.chain || '').toUpperCase();
+      const addr  = data.address || '';
+      current = { address: addr, chain: chain, displayName: data.display_name || null };
+
+      identityAddress.textContent = addr;
+      avatar.textContent = chain.slice(0, 3) || '?';
+      document.getElementById('copy-addr').onclick = () => navigator.clipboard.writeText(addr);
+
+      updateNameDisplay(data.display_name, data.name_source, chain, data.name_resolving);
+      statsGrid.innerHTML = buildStats(chain, data);
+      renderTransactions(chain, data);
+    }
+
+    /* ------------------------------------------------------------------
+       Affichage du nom + bouton refresh
+       ------------------------------------------------------------------ */
+    function updateNameDisplay(name, source, chain, resolving = false) {
+      const chainBadge = chain ? `<span class="chain-badge">${escapeHtml(chain)}</span>` : '';
+
+      let nameHtml;
+      if (name) {
+        nameHtml = `<span class="name-value">${escapeHtml(name)}</span>`;
+      } else if (resolving) {
+        nameHtml = `<span class="placeholder">Résolution en cours…</span>`;
+      } else {
+        nameHtml = `<span class="placeholder">Nom non résolu</span>`;
+      }
+
+      const refreshBtn = `
+        <button class="name-refresh" id="name-refresh" type="button" title="Forcer la résolution">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3-6.7"/>
+            <polyline points="21 3 21 9 15 9"/>
+          </svg>
+        </button>`;
+
+      identityName.innerHTML = nameHtml + chainBadge + refreshBtn;
+
+      document.getElementById('name-refresh')
+        .addEventListener('click', onForceResolve);
+    }
+
+    async function onForceResolve() {
+      if (!current.address) return;
+      const btn = document.getElementById('name-refresh');
+      if (btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add('spinning');
+
+      try {
+        const r = await fetch(
+          `/api/address/${encodeURIComponent(current.address)}/resolve`,
+          { method: 'POST' }
+        );
+        const data = await r.json();
+
+        if (!r.ok) {
+          showToast(data.error || 'Erreur de résolution', 'error');
+          return;
+        }
+
+        if (data.display_name) {
+          updateNameDisplay(data.display_name, data.name_source, current.chain);
+          showToast('Nom trouvé : ' + data.display_name, 'success');
+        } else {
+          updateNameDisplay(null, null, current.chain);
+          showToast('Aucun nom trouvé pour cette adresse', 'error');
+        }
+      } catch (err) {
+        showToast('Erreur réseau : ' + err.message, 'error');
+      } finally {
+        const b = document.getElementById('name-refresh');
+        if (b) { b.disabled = false; b.classList.remove('spinning'); }
+      }
+    }
+
+    /* ------------------------------------------------------------------
+       Cartes stats
+       ------------------------------------------------------------------ */
+    function buildStats(chain, d) {
+      const cards = [];
+      const fiat = d.balance_usd != null
+        ? `<div class="card-sub">≈ ${formatFiat(d.balance_usd)}</div>` : '';
+
+      if (chain === 'BTC' || chain === 'BCH') {
+        const unit = chain.toLowerCase();
+        cards.push(card('Solde confirmé', `${d[`balance_${unit}`] ?? 0} ${chain}`, fiat, true));
+        cards.push(card('En attente', `${d.pending_btc ?? d.pending_bch ?? 0} ${chain}`, '', false));
+        cards.push(card('Total reçu', `${d.received_btc ?? d.received_bch ?? 0} ${chain}`, '', false));
+        cards.push(card('Transactions', d.tx_count ?? 0, `${d.utxo_count ?? 0} UTXO`, false));
+      } else if (chain === 'ETH') {
+        cards.push(card('Solde', `${round(d.balance_eth)} ETH`, fiat, true));
+        cards.push(card('Total reçu', `${round(d.total_received_eth)} ETH`, '', false));
+        cards.push(card('Total envoyé', `${round(d.total_sent_eth)} ETH`, '', false));
+        cards.push(card('Transactions', d.tx_count ?? '—', `${d.internal_tx_count ?? 0} internes`, false));
+      }
+      return cards.join('');
+    }
+
+    function card(label, value, sub = '', accent = false) {
+      return `
+        <div class="card">
+          <div class="card-label">${escapeHtml(label)}</div>
+          <div class="card-value ${accent ? 'accent' : ''}">${escapeHtml(String(value))}</div>
+          ${sub ? `<div class="card-sub">${sub}</div>` : ''}
+        </div>`;
+    }
+
+    /* ------------------------------------------------------------------
+       Transactions
+       ------------------------------------------------------------------ */
+    function renderTransactions(chain, d) {
+      const txs = d.transactions || [];
+      txCount.textContent = txs.length ? `${txs.length}` : '0';
+
+      if (!txs.length) {
+        txList.innerHTML = `
+          <li class="empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="5" width="18" height="14" rx="2"/>
+              <path d="M3 10h18"/>
+            </svg>
+            <div>Aucune transaction à afficher pour le moment.</div>
+          </li>`;
+        return;
+      }
+
+      txList.innerHTML = txs.map(tx => {
+        const direction = detectDirection(tx, d.address);
+        let amount;
+        if (chain === 'ETH') {
+          amount = `${round(tx.value_eth)} ETH`;
+        } else if (chain === 'BCH') {
+          amount = `${round(tx.value_bch)} BCH`;
+        } else {
+          amount = `${round(tx.value_btc)} BTC`;
+        }
+        const hash = tx.hash || '';
+        const hashShort = hash ? `${hash.slice(0, 10)}…${hash.slice(-6)}` : '—';
+        const when = tx.datetime ? new Date(tx.datetime).toLocaleString('fr-FR') : '—';
+
+        return `
+          <li class="tx-item">
+            <div class="tx-icon ${direction}">${direction === 'in' ? '↓' : direction === 'out' ? '↑' : '·'}</div>
+            <div class="tx-main">
+              <div class="tx-hash" title="${escapeHtml(hash)}">${escapeHtml(hashShort)}</div>
+              <div class="tx-meta">${escapeHtml(when)}</div>
+            </div>
+            <div class="tx-amount">${escapeHtml(String(amount))}</div>
+          </li>`;
+      }).join('');
+    }
+
+    function detectDirection(tx, self) {
+      if (!self) return 'pending';
+      const s = self.toLowerCase();
+      const from = (tx.from || '').toLowerCase();
+      const to   = (tx.to || '').toLowerCase();
+      if (to === s) return 'in';
+      if (from === s) return 'out';
+      return 'pending';
+    }
+
+    /* ------------------------------------------------------------------
+       Suggestions (dropdown des recherches récentes)
+       ------------------------------------------------------------------ */
+    function bindSuggestions(inputEl, containerEl) {
+      let lastFocused = false;
+
+      const hide = () => { containerEl.hidden = true; containerEl.innerHTML = ''; };
+
+      const show = async () => {
+        try {
+          const r = await fetch('/api/addresses/recent');
+          if (!r.ok) return;
+          const items = await r.json();
+          if (!items.length) return;
+          if (!lastFocused) return;
+          renderSuggestions(items, containerEl, inputEl);
+        } catch {}
+      };
+
+      inputEl.addEventListener('focus', () => {
+        lastFocused = true;
+        show();
+      });
+
+      inputEl.addEventListener('blur', () => {
+        lastFocused = false;
+        // Délai pour laisser le clic sur une suggestion s'exécuter.
+        setTimeout(hide, 180);
+      });
+
+      // Ctrl+K pour focus rapide
+      document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          inputEl.focus();
+          inputEl.select();
+        }
+      });
+    }
+
+    function renderSuggestions(items, containerEl, inputEl) {
+      const header = `<div class="suggestions-header">Recherches récentes</div>`;
+
+      const rows = items.map(it => {
+        const chain = (it.chain || '').toUpperCase();
+        const addr = it.address || '';
+        const name = it.display_name;
+        const time = formatRelativeTime(it.last_seen);
+
+        return `
+          <div class="suggestion-item" data-addr="${escapeHtml(addr)}">
+            <div class="suggestion-chain">${escapeHtml(chain)}</div>
+            <div class="suggestion-text">
+              <div class="suggestion-address">${escapeHtml(addr)}</div>
+              <div class="suggestion-name ${name ? '' : 'muted'}">
+                ${name ? escapeHtml(name) : 'Nom non résolu'}
+              </div>
+            </div>
+            <div class="suggestion-time">${escapeHtml(time)}</div>
+          </div>`;
+      }).join('');
+
+      containerEl.innerHTML = header + rows;
+      containerEl.hidden = false;
+
+      containerEl.querySelectorAll('.suggestion-item').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          // mousedown se déclenche avant blur, on empêche la disparition.
+          e.preventDefault();
+          const addr = el.dataset.addr;
+          inputEl.value = addr;
+          containerEl.hidden = true;
+          search(addr);
+        });
+      });
+    }
+
+    /* ------------------------------------------------------------------
+       Utilitaires
+       ------------------------------------------------------------------ */
+    function formatRelativeTime(iso) {
+      if (!iso) return '';
+      // SQLite renvoie "YYYY-MM-DD HH:MM:SS" (UTC) sans le T.
+      const normalized = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z';
+      const d = new Date(normalized);
+      if (isNaN(d)) return '';
+      const diff = (Date.now() - d.getTime()) / 1000;
+      if (diff < 60) return 'à l\'instant';
+      if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
+      if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
+      return `il y a ${Math.floor(diff / 86400)} j`;
+    }
+    function round(n) {
+      if (n == null) return '0';
+      const x = Number(n);
+      if (isNaN(x)) return '0';
+      return x.toLocaleString('fr-FR', { maximumFractionDigits: 6 });
+    }
+    function formatFiat(n) {
+      return Number(n).toLocaleString('fr-FR', {
+        style: 'currency', currency: 'USD', maximumFractionDigits: 2
+      });
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    /* ------------------------------------------------------------------
+       Liaison des deux barres
+       ------------------------------------------------------------------ */
+    bindSuggestions(heroInput, document.getElementById('hero-suggestions'));
+    bindSuggestions(topbarInput, document.getElementById('topbar-suggestions'));
+  </script>
+</body>
+</html>
